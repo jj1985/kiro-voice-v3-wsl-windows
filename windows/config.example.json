@@ -1,0 +1,35 @@
+{
+  "wake_enabled": true,
+  "wake_backend": "whisper_phrase",
+  "wake_phrase": "hey kiro",
+  "wake_model": "",
+  "wake_threshold": 0.55,
+  "command_arm_timeout_seconds": 8.0,
+  "conversation_timeout_seconds": 30.0,
+  "barge_in_enabled": true,
+  "barge_in_requires_name": true,
+  "barge_name": "kiro",
+  "stop_phrases": [
+    "kiro stop",
+    "hey kiro stop"
+  ],
+  "cancel_phrases": [
+    "kiro cancel",
+    "hey kiro cancel"
+  ],
+  "sample_rate": 16000,
+  "block_ms": 80,
+  "speech_rms_threshold": 0.012,
+  "speech_start_ms": 200,
+  "silence_stop_ms": 850,
+  "max_utterance_seconds": 45.0,
+  "whisper_model": "small.en",
+  "whisper_device": "cpu",
+  "whisper_compute_type": "int8",
+  "tts_enabled": true,
+  "tts_rate": 190,
+  "tts_volume": 1.0,
+  "tts_max_chars": 3500,
+  "activation_sound": true,
+  "wake_whisper_model": "tiny.en"
+}
