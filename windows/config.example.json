@@ -11,11 +11,17 @@
   "barge_name": "kiro",
   "stop_phrases": [
     "kiro stop",
-    "hey kiro stop"
+    "hey kiro stop",
+    "claude stop",
+    "codex stop",
+    "agent stop"
   ],
   "cancel_phrases": [
     "kiro cancel",
-    "hey kiro cancel"
+    "hey kiro cancel",
+    "claude cancel",
+    "codex cancel",
+    "agent cancel"
   ],
   "sample_rate": 16000,
   "block_ms": 80,
