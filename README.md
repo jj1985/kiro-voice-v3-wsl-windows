@@ -1,74 +1,59 @@
-# Kiro Voice V3 — Windows 11 + WSL2 Ubuntu 24.04
+# Agent Voice — Kiro + Claude Code + Codex on Windows 11 / WSL2
 
-Always-listening, local voice activation for Kiro CLI.
+Always-listening local voice control for coding agents running inside **WSL2 Ubuntu 24.04**.
 
-## What V3 adds
+Supported agent backends:
 
-- **Always-listening wake phrase** — default: `Hey Kiro`
-- **No keypress required**
-- **Conversation mode** — follow-ups do not need the wake phrase for 30 seconds
-- **Barge-in** while Kiro is speaking
-- **"Kiro stop" / "Kiro cancel"**
-- **Activation/sleep sounds**
-- **Cancelable Windows TTS**
-- **Optional openWakeWord custom model**
-- **Windows logon auto-start**
-- Kiro itself still runs in **WSL Ubuntu 24.04** through ACP
+- **Kiro CLI** via `kiro-cli acp`
+- **Claude Code CLI** via supported `claude -p --output-format stream-json`
+- **OpenAI Codex CLI** via supported `codex exec --json`
+
+The Windows side owns microphone capture, local Whisper speech-to-text, wake-word detection, and Windows TTS. The coding agents and project files stay inside WSL.
+
+## Features
+
+- Always-listening wake phrase; default: **Hey Kiro**
+- Local `faster-whisper` transcription
+- Kiro / Claude Code / Codex backend selection
+- Voice backend switching: **"switch to Claude"**, **"switch to Codex"**, **"switch to Kiro"**
+- Terminal backend switching with `/backend`
+- 30-second hands-free follow-up conversation window
+- Spoken agent responses
+- Barge-in phrases including `Kiro stop`, `Claude stop`, `Codex stop`, and `Agent stop`
+- Cancellation of the current agent process/turn
+- Windows login auto-start with selectable backend
+- Optional openWakeWord custom wake model
 
 ## Architecture
 
 ```text
 Windows 11
   microphone
-     │
-     ├── speech segmentation
-     │
-     ├── wake detector
-     │     ├── whisper_phrase (default; any phrase, no training)
-     │     └── openWakeWord (optional custom ONNX model)
-     │
-     ├── faster-whisper STT
-     └── cancelable Windows SAPI TTS
-              │
-              │ JSONL/stdin/stdout over WSL interop
-              ▼
+     |
+     +-- speech gate / wake detection
+     +-- faster-whisper STT
+     +-- cancelable Windows SAPI TTS
+              |
+              | JSONL over WSL interop
+              v
 WSL2 Ubuntu 24.04
   kiro_voice.py
-     │
-     ▼
-  ACP Python SDK
-     │
-     ▼
-  kiro-cli acp
-     │
-     ├── project files
-     ├── shell/tools
-     └── MCP/agents
+       |
+       +-- KiroBackend   -> kiro-cli acp
+       +-- ClaudeBackend -> claude -p ... stream-json
+       `-- CodexBackend  -> codex exec --json
+              |
+              v
+       project / shell / tools / MCP
 ```
 
-## Why the default wake backend is `whisper_phrase`
+## 1. Windows audio setup
 
-A dedicated wake-word model is the lowest-power option, but a phrase such as
-**"Hey Kiro"** needs a matching model.
+Install **Python 3.12 x64** and allow desktop microphone access:
 
-V3 works immediately by using a lightweight audio gate continuously and only
-running a tiny Whisper model after an actual speech segment is detected. The resulting local
-transcript is checked for `Hey Kiro`. After activation, the command is transcribed again
-with the higher-quality command model. Audio/transcription stays on the Windows
-machine.
+`Settings -> Privacy & security -> Microphone -> Let desktop apps access your microphone`
 
-Once you train or obtain an openWakeWord `.onnx` model for `Hey Kiro`, change
-`wake_backend` to `openwakeword` and set `wake_model` in `windows/config.json`.
-
-## 1. Windows setup
-
-Install **Python 3.12 x64**.
-
-Enable desktop microphone access:
-
-`Settings → Privacy & security → Microphone → Let desktop apps access your microphone`
-
-In PowerShell:
+From PowerShell:
 
 ```powershell
 cd C:\path\to\kiro-voice-v3-wsl-windows
@@ -76,167 +61,219 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\windows\setup.ps1
 ```
 
-The script prints a WSL environment line:
+The setup script prints the Windows Python path as seen from WSL. Add it to `~/.bashrc`:
 
 ```bash
-export KIRO_VOICE_WINDOWS_PY='/mnt/c/.../windows/.venv/Scripts/python.exe'
+export AGENT_VOICE_WINDOWS_PY='/mnt/c/.../windows/.venv/Scripts/python.exe'
 ```
 
-Put it in `~/.bashrc` inside WSL:
+The legacy `KIRO_VOICE_WINDOWS_PY` variable is still supported.
 
-```bash
-echo "export KIRO_VOICE_WINDOWS_PY='/mnt/c/.../python.exe'" >> ~/.bashrc
-source ~/.bashrc
-```
+## 2. Install the agent CLIs inside WSL
 
-## 2. WSL Ubuntu 24.04 setup
+You only need to install the backends you intend to use.
 
-Kiro CLI must be installed and authenticated **inside WSL**:
+### Kiro
 
 ```bash
 curl -fsSL https://cli.kiro.dev/install | bash
 kiro-cli
 ```
 
-Then:
+### Claude Code
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+claude
+```
+
+Authenticate Claude Code normally before using the voice wrapper.
+
+### Codex
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+codex
+```
+
+Authenticate Codex normally before using the voice wrapper.
+
+## 3. Install the WSL voice controller
 
 ```bash
 cd /mnt/c/path/to/kiro-voice-v3-wsl-windows
 bash wsl/setup.sh
 ```
 
-## 3. Run it
+The setup script reports which of `kiro-cli`, `claude`, and `codex` it can find.
 
-Set the project Kiro should work in:
+## 4. Choose a default backend
+
+Kiro remains the default for backward compatibility.
 
 ```bash
-export KIRO_VOICE_PROJECT="$HOME/src/my-project"
+export AGENT_VOICE_PROJECT="$HOME/src/my-project"
+export AGENT_VOICE_BACKEND=kiro
 ./wsl/run.sh
 ```
 
-Now leave the terminal open and say:
+Claude Code:
 
-```text
-Hey Kiro
+```bash
+AGENT_VOICE_BACKEND=claude ./wsl/run.sh
 ```
 
-You hear an activation tone. Then say:
+Codex:
 
-```text
-Look through this project and explain how authentication works.
+```bash
+AGENT_VOICE_BACKEND=codex ./wsl/run.sh
 ```
 
-Kiro replies normally in the terminal and the response is spoken.
+You can also invoke the controller directly:
 
-You can also say the phrase and command together:
-
-```text
-Hey Kiro, run the unit tests.
+```bash
+python wsl/kiro_voice.py --project ~/src/my-project --backend claude
+python wsl/kiro_voice.py --project ~/src/my-project --backend codex
 ```
 
-## Conversation mode
+## Switch agents while running
 
-After Kiro finishes speaking, V3 automatically opens a 30-second follow-up
-window:
+Terminal commands:
 
 ```text
-You:  Hey Kiro, inspect auth.py.
-Kiro: ...
-You:  Fix the token expiration bug.
-Kiro: ...
-You:  Run the tests.
+/backend
+/backend kiro
+/backend claude
+/backend codex
 ```
 
-No repeated `Hey Kiro` is required until the conversation window expires.
+Or say during an active voice window:
 
-## Barge-in
+```text
+switch to Claude
+switch to Codex
+switch to Kiro
+```
 
-While Kiro is speaking:
+A backend switch starts that backend's voice-controller session. Switching away and then back currently starts a new wrapper session for that backend rather than automatically restoring the previous wrapper session.
+
+## Claude Code behavior
+
+The Claude backend runs print mode with structured streaming:
+
+```text
+claude -p --output-format stream-json --verbose --include-partial-messages
+```
+
+Text deltas are streamed to the terminal as Claude generates them. The wrapper captures Claude's `session_id` and uses `--resume <session-id>` for voice follow-ups, so context is preserved throughout the active Claude voice session.
+
+Optional model:
+
+```bash
+python wsl/kiro_voice.py --backend claude --claude-model sonnet
+```
+
+Optional permission mode passthrough:
+
+```bash
+export AGENT_VOICE_CLAUDE_PERMISSION_MODE=plan
+```
+
+The wrapper intentionally does **not** enable `--dangerously-skip-permissions`. Claude's normal settings and permission model remain in control.
+
+## Codex behavior
+
+The Codex backend runs:
+
+```text
+codex exec --json
+```
+
+It captures the `thread.started` thread ID, extracts completed `agent_message` items, and resumes follow-ups with:
+
+```text
+codex exec --json resume <THREAD_ID> "follow-up"
+```
+
+Optional model:
+
+```bash
+python wsl/kiro_voice.py --backend codex --codex-model <model>
+```
+
+Optional sandbox policy for the initial Codex thread:
+
+```bash
+python wsl/kiro_voice.py \
+  --backend codex \
+  --codex-sandbox workspace-write
+```
+
+Or:
+
+```bash
+export AGENT_VOICE_CODEX_SANDBOX=workspace-write
+```
+
+Available values are `read-only`, `workspace-write`, and `danger-full-access`. No override is applied by default, so your Codex configuration remains authoritative.
+
+For a non-Git working directory:
+
+```bash
+export AGENT_VOICE_CODEX_SKIP_GIT_CHECK=1
+```
+
+## Kiro behavior
+
+Kiro continues to use its ACP server:
+
+```text
+kiro-cli acp
+```
+
+Kiro ACP permission requests remain interactive in the terminal. You can also select a Kiro custom agent:
+
+```bash
+python wsl/kiro_voice.py --backend kiro --agent my-agent
+```
+
+## Voice workflow
+
+Example:
+
+```text
+You:   Hey Kiro, inspect the authentication code.
+Claude Code: ...
+
+You:   Fix the token expiration problem.
+Claude Code: ...
+
+You:   switch to Codex
+Agent Voice: Switched to Codex.
+
+You:   Review the current changes for regressions.
+Codex: ...
+```
+
+The wake phrase is independent of the selected coding backend. You can change `wake_phrase` in `windows/config.json`; for a multi-agent setup, `hey agent` may feel more natural than `hey kiro`.
+
+## Barge-in / cancellation
+
+While TTS is speaking, these default phrases stop/cancel it:
 
 ```text
 Kiro stop
-```
+Claude stop
+Codex stop
+Agent stop
 
-stops TTS and cancels the active turn where possible.
-
-```text
 Kiro cancel
+Claude cancel
+Codex cancel
+Agent cancel
 ```
 
-does the same and leaves the assistant ready for a follow-up.
-
-For protection against the speakers accidentally triggering the microphone,
-barge-in requires the word `Kiro` by default.
-
-## Change the wake phrase
-
-Edit:
-
-```text
-windows/config.json
-```
-
-For the default backend:
-
-```json
-{
-  "wake_backend": "whisper_phrase",
-  "wake_phrase": "computer"
-}
-```
-
-Any spoken phrase can be used without training a model.
-
-## Lower-power openWakeWord mode
-
-For an openWakeWord custom `.onnx` model:
-
-```json
-{
-  "wake_backend": "openwakeword",
-  "wake_phrase": "hey kiro",
-  "wake_model": "models/hey_kiro.onnx",
-  "wake_threshold": 0.55
-}
-```
-
-Model paths are relative to `windows/` unless absolute.
-
-With this mode, openWakeWord examines the 16 kHz PCM microphone stream and
-Whisper is used for the command text after activation.
-
-## Whisper GPU mode
-
-Start with CPU mode first.
-
-If your Windows CUDA/CTranslate2 setup supports it, edit:
-
-```json
-{
-  "wake_whisper_model": "tiny.en",
-  "whisper_model": "small.en",
-  "whisper_device": "cuda",
-  "whisper_compute_type": "float16"
-}
-```
-
-A modern GPU can make command transcription substantially faster.
-
-## Tune microphone sensitivity
-
-If ambient noise is starting recordings, increase:
-
-```json
-"speech_rms_threshold": 0.018
-```
-
-If your voice is not detected consistently, lower it:
-
-```json
-"speech_rms_threshold": 0.008
-```
-
-The default is `0.012`.
+The active CLI process or ACP turn is then cancelled where supported.
 
 ## Terminal controls
 
@@ -248,61 +285,57 @@ The default is `0.012`.
 /unmute
 /cancel
 /status
+/backend
+/backend kiro|claude|codex
 /quit
 ```
 
-`/listen` manually arms one voice command without saying the wake phrase.
+## Windows auto-start
 
-## Auto-start at Windows login
-
-This intentionally starts the WSL controller in **Windows Terminal**, rather
-than hiding it in the background, because Kiro may need interactive permission
-approval.
-
-PowerShell:
+Choose the backend when installing the startup entry:
 
 ```powershell
 cd C:\path\to\kiro-voice-v3-wsl-windows\windows
 
 .\install-autostart.ps1 `
     -Distro "Ubuntu-24.04" `
-    -KiroProject "~/src/my-project"
+    -Project "~/src/my-project" `
+    -Backend "claude"
 ```
 
-At the next Windows login, Windows Terminal opens a Kiro Voice tab and starts
-the WSL controller.
+Valid backend values are `kiro`, `claude`, and `codex`.
 
-Remove it with:
+Remove the startup entry with:
 
 ```powershell
 .\install-autostart.ps1 -Remove
 ```
 
-## Smoke test before connecting Kiro
+## Wake-word configuration
 
-From WSL:
+The default `whisper_phrase` backend works immediately with arbitrary phrases because only detected speech segments are sent through a small local Whisper model for wake-phrase matching.
 
-```bash
-source ~/.venvs/kiro-voice/bin/activate
-python wsl/test_audio_bridge.py
+Edit `windows/config.json` after Windows setup:
+
+```json
+{
+  "wake_backend": "whisper_phrase",
+  "wake_phrase": "hey agent"
+}
 ```
 
-Say `Hey Kiro`. You should see wake and utterance events.
+For a lower-power dedicated wake model, point `wake_model` at an openWakeWord ONNX model and set `wake_backend` to `openwakeword`.
 
 ## Privacy
 
-With `whisper_phrase`, microphone speech segments are transcribed locally by
-faster-whisper to determine whether the wake phrase was spoken. Nothing in this
-project sends microphone audio to Kiro.
+Microphone audio and Whisper transcription remain local to the Windows machine. The voice wrapper sends **transcribed command text**, not raw microphone audio, to the selected coding CLI.
 
-Only command **text** is sent to Kiro after activation.
+Each agent CLI retains its own authentication, account, network behavior, configuration, permission rules, telemetry policy, and tool access.
 
-With a dedicated openWakeWord model, Whisper does not need to run on ordinary
-room speech; only the wake-word model processes the continuous stream.
+## Notes on output streaming
 
-## Practical audio note
+- **Kiro:** ACP message chunks stream directly.
+- **Claude Code:** token-level text deltas stream from `stream-json`.
+- **Codex:** `codex exec --json` emits structured JSONL events; agent messages are surfaced when its `agent_message` item completes.
 
-If you use speakers rather than headphones, Kiro's own TTS can be picked up by
-the microphone. V3 ignores ordinary speech while TTS is active and requires the
-configured `barge_name` (`Kiro`) for barge-in by default. A headset provides
-the best full-duplex behavior.
+This project intentionally uses documented/programmatic CLI interfaces rather than scraping interactive terminal UIs.
