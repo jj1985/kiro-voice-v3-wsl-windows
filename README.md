@@ -1,341 +1,222 @@
-# Agent Voice — Kiro + Claude Code + Codex on Windows 11 / WSL2
+# Quack Actual
 
-Always-listening local voice control for coding agents running inside **WSL2 Ubuntu 24.04**.
+**One voice. Every agent.**
 
-Supported agent backends:
+A local voice console for GitHub Copilot CLI, Claude Code, Codex CLI, and Kiro CLI.
+Say **“Quack Actual”**, give a command, and hear the response. Switch coding agents
+without changing your microphone setup.
 
-- **Kiro CLI** via `kiro-cli acp`
-- **Claude Code CLI** via supported `claude -p --output-format stream-json`
-- **OpenAI Codex CLI** via supported `codex exec --json`
+Version 0.5.0 is a preview release. Native Windows 11 and WSL2 Ubuntu 24.04 are
+first-class launch paths. Automated tests use simulated agents; you must perform
+the live microphone and authenticated-agent checks described below on your machine.
 
-The Windows side owns microphone capture, local Whisper speech-to-text, wake-word detection, and Windows TTS. The coding agents and project files stay inside WSL.
+## Choose your installation
 
-## Features
+| Mode | Controller and coding agents | Microphone and speech | Environment |
+|---|---|---|---|
+| Native Windows 11 x64 | Windows; no WSL required | Windows | `.venv` |
+| WSL2 Ubuntu 24.04 | Ubuntu | Windows through WSL interop | `.venv-wsl` plus Windows `.venv` |
+| Text-only | Windows or Linux | None | Either environment above |
 
-- Always-listening wake phrase; default: **Hey Kiro**
-- Local `faster-whisper` transcription
-- Kiro / Claude Code / Codex backend selection
-- Voice backend switching: **"switch to Claude"**, **"switch to Codex"**, **"switch to Kiro"**
-- Terminal backend switching with `/backend`
-- 30-second hands-free follow-up conversation window
-- Spoken agent responses
-- Barge-in phrases including `Kiro stop`, `Claude stop`, `Codex stop`, and `Agent stop`
-- Cancellation of the current agent process/turn
-- Windows login auto-start with selectable backend
-- Optional openWakeWord custom wake model
+All paths use the same `quack_actual` Python package. No terminal scraping, network
+listener, cloud speech API, or credential proxy is involved. Raw microphone audio
+stays in local memory. Activated command text and project context are handled by
+the selected coding agent under that provider's policies and your configuration.
 
-## Architecture
+## Native Windows: setup and first run
 
-```text
-Windows 11
-  microphone
-     |
-     +-- speech gate / wake detection
-     +-- faster-whisper STT
-     +-- cancelable Windows SAPI TTS
-              |
-              | JSONL over WSL interop
-              v
-WSL2 Ubuntu 24.04
-  kiro_voice.py
-       |
-       +-- KiroBackend   -> kiro-cli acp
-       +-- ClaudeBackend -> claude -p ... stream-json
-       `-- CodexBackend  -> codex exec --json
-              |
-              v
-       project / shell / tools / MCP
-```
-
-## 1. Windows audio setup
-
-Install **Python 3.12 x64** and allow desktop microphone access:
-
-`Settings -> Privacy & security -> Microphone -> Let desktop apps access your microphone`
-
-From PowerShell:
+Download the setup ZIP from this repository's **Releases**, extract it to a permanent
+folder such as `C:\Tools\quack-actual`, and open PowerShell there. Do not install
+inside the ZIP viewer or move the folder after creating its virtual environment.
 
 ```powershell
-cd C:\path\to\kiro-voice-v3-wsl-windows
 Set-ExecutionPolicy -Scope Process Bypass
-.\windows\setup.ps1
+.\install.ps1
 ```
 
-The setup script prints the Windows Python path as seen from WSL. Add it to `~/.bashrc`:
+The installer provisions `uv` when missing, manages Python 3.12, creates `.venv`,
+installs the application and speech dependencies, creates user configuration without
+overwriting it, and downloads the configured speech models. A release bundle has
+`uv.lock`; installation uses `uv sync --locked`. A development checkout without a
+lockfile resolves and creates one on its first installation.
 
-```bash
-export AGENT_VOICE_WINDOWS_PY='/mnt/c/.../windows/.venv/Scripts/python.exe'
-```
+An internet connection is required for initial downloads. This is a complete
+**online setup bundle**, not an offline bundle of Python, every model, and every
+vendor's CLI. Agent accounts and licenses are not included.
 
-The legacy `KIRO_VOICE_WINDOWS_PY` variable is still supported.
+Install and authenticate at least one coding CLI **in Windows** before running.
+Examples (only run the commands for the tools you choose):
 
-## 2. Install the agent CLIs inside WSL
+```powershell
+# Copilot CLI: official WinGet package
+winget install GitHub.Copilot
+copilot
 
-You only need to install the backends you intend to use.
-
-### Kiro
-
-```bash
-curl -fsSL https://cli.kiro.dev/install | bash
-kiro-cli
-```
-
-### Claude Code
-
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
+# Claude Code: official WinGet package
+winget install Anthropic.ClaudeCode
 claude
-```
 
-Authenticate Claude Code normally before using the voice wrapper.
-
-### Codex
-
-```bash
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
+# Codex: with a supported Node.js installation
+npm install -g @openai/codex
 codex
 ```
 
-Authenticate Codex normally before using the voice wrapper.
+For Kiro, use its official Windows installation instructions linked in
+[backend documentation](docs/BACKENDS.md), then authenticate `kiro-cli` normally.
+Open a fresh terminal after installing a CLI so PATH changes take effect.
+Quack Actual uses each CLI's own authentication; never put tokens in this repo.
 
-## 3. Install the WSL voice controller
-
-```bash
-cd /mnt/c/path/to/kiro-voice-v3-wsl-windows
-bash wsl/setup.sh
-```
-
-The setup script reports which of `kiro-cli`, `claude`, and `codex` it can find.
-
-## 4. Choose a default backend
-
-Kiro remains the default for backward compatibility.
-
-```bash
-export AGENT_VOICE_PROJECT="$HOME/src/my-project"
-export AGENT_VOICE_BACKEND=kiro
-./wsl/run.sh
-```
-
-Claude Code:
-
-```bash
-AGENT_VOICE_BACKEND=claude ./wsl/run.sh
-```
-
-Codex:
-
-```bash
-AGENT_VOICE_BACKEND=codex ./wsl/run.sh
-```
-
-You can also invoke the controller directly:
-
-```bash
-python wsl/kiro_voice.py --project ~/src/my-project --backend claude
-python wsl/kiro_voice.py --project ~/src/my-project --backend codex
-```
-
-## Switch agents while running
-
-Terminal commands:
-
-```text
-/backend
-/backend kiro
-/backend claude
-/backend codex
-```
-
-Or say during an active voice window:
-
-```text
-switch to Claude
-switch to Codex
-switch to Kiro
-```
-
-A backend switch starts that backend's voice-controller session. Switching away and then back currently starts a new wrapper session for that backend rather than automatically restoring the previous wrapper session.
-
-## Claude Code behavior
-
-The Claude backend runs print mode with structured streaming:
-
-```text
-claude -p --output-format stream-json --verbose --include-partial-messages
-```
-
-Text deltas are streamed to the terminal as Claude generates them. The wrapper captures Claude's `session_id` and uses `--resume <session-id>` for voice follow-ups, so context is preserved throughout the active Claude voice session.
-
-Optional model:
-
-```bash
-python wsl/kiro_voice.py --backend claude --claude-model sonnet
-```
-
-Optional permission mode passthrough:
-
-```bash
-export AGENT_VOICE_CLAUDE_PERMISSION_MODE=plan
-```
-
-The wrapper intentionally does **not** enable `--dangerously-skip-permissions`. Claude's normal settings and permission model remain in control.
-
-## Codex behavior
-
-The Codex backend runs:
-
-```text
-codex exec --json
-```
-
-It captures the `thread.started` thread ID, extracts completed `agent_message` items, and resumes follow-ups with:
-
-```text
-codex exec --json resume <THREAD_ID> "follow-up"
-```
-
-Optional model:
-
-```bash
-python wsl/kiro_voice.py --backend codex --codex-model <model>
-```
-
-Optional sandbox policy for the initial Codex thread:
-
-```bash
-python wsl/kiro_voice.py \
-  --backend codex \
-  --codex-sandbox workspace-write
-```
-
-Or:
-
-```bash
-export AGENT_VOICE_CODEX_SANDBOX=workspace-write
-```
-
-Available values are `read-only`, `workspace-write`, and `danger-full-access`. No override is applied by default, so your Codex configuration remains authoritative.
-
-For a non-Git working directory:
-
-```bash
-export AGENT_VOICE_CODEX_SKIP_GIT_CHECK=1
-```
-
-## Kiro behavior
-
-Kiro continues to use its ACP server:
-
-```text
-kiro-cli acp
-```
-
-Kiro ACP permission requests remain interactive in the terminal. You can also select a Kiro custom agent:
-
-```bash
-python wsl/kiro_voice.py --backend kiro --agent my-agent
-```
-
-## Voice workflow
-
-Example:
-
-```text
-You:   Hey Kiro, inspect the authentication code.
-Claude Code: ...
-
-You:   Fix the token expiration problem.
-Claude Code: ...
-
-You:   switch to Codex
-Agent Voice: Switched to Codex.
-
-You:   Review the current changes for regressions.
-Codex: ...
-```
-
-The wake phrase is independent of the selected coding backend. You can change `wake_phrase` in `windows/config.json`; for a multi-agent setup, `hey agent` may feel more natural than `hey kiro`.
-
-## Barge-in / cancellation
-
-While TTS is speaking, these default phrases stop/cancel it:
-
-```text
-Kiro stop
-Claude stop
-Codex stop
-Agent stop
-
-Kiro cancel
-Claude cancel
-Codex cancel
-Agent cancel
-```
-
-The active CLI process or ACP turn is then cancelled where supported.
-
-## Terminal controls
-
-```text
-/help
-/listen
-/sleep
-/mute
-/unmute
-/cancel
-/status
-/backend
-/backend kiro|claude|codex
-/quit
-```
-
-## Windows auto-start
-
-Choose the backend when installing the startup entry:
+Enable **Settings → Privacy & security → Microphone → Let desktop apps access your
+microphone**. Then:
 
 ```powershell
-cd C:\path\to\kiro-voice-v3-wsl-windows\windows
-
-.\install-autostart.ps1 `
-    -Distro "Ubuntu-24.04" `
-    -Project "~/src/my-project" `
-    -Backend "claude"
+.\launch.ps1 doctor --backend copilot
+.\launch.ps1 devices
+.\launch.ps1 start --backend copilot --project C:\src\my-project
 ```
 
-Valid backend values are `kiro`, `claude`, and `codex`.
+Say “Quack Actual”, wait for the tone, then ask a question. You can also combine the
+wake phrase and command: “Quack Actual, explain this repository.” After a spoken
+reply, a 30-second follow-up window opens. Recognition is English in this release.
 
-Remove the startup entry with:
+For a keyboard-only installation and initial agent smoke test:
 
 ```powershell
-.\install-autostart.ps1 -Remove
+.\install.ps1 -TextOnly
+.\launch.ps1 start --backend copilot --project C:\src\my-project --text-only
 ```
 
-## Wake-word configuration
+Rerun `install.ps1` without `-TextOnly` to add voice. `-SkipModels` defers model
+download until first use; `-NoBootstrap` requires an already installed `uv`.
+Launchers use the environment directly, so activation is optional and Python is
+never installed into your system environment by these scripts.
 
-The default `whisper_phrase` backend works immediately with arbitrary phrases because only detected speech segments are sent through a small local Whisper model for wake-phrase matching.
+## WSL2 Ubuntu 24.04
 
-Edit `windows/config.json` after Windows setup:
+Run the Windows installer first in a checkout on the Windows filesystem. In Ubuntu,
+open **that same checkout**, install/authenticate your preferred coding CLI in Ubuntu,
+and create the separate Linux environment:
 
-```json
-{
-  "wake_backend": "whisper_phrase",
-  "wake_phrase": "hey agent"
-}
+```bash
+cd /mnt/c/Tools/quack-actual
+bash install.sh
+bash launch.sh start --backend copilot --project "$HOME/src/my-project"
 ```
 
-For a lower-power dedicated wake model, point `wake_model` at an openWakeWord ONNX model and set `wake_backend` to `openwakeword`.
+The controller automatically finds this checkout's Windows `.venv/Scripts/python.exe`
+for the audio process. With separate checkouts, pass the Windows interpreter's WSL path:
 
-## Privacy
+```bash
+bash launch.sh start --backend kiro --project "$HOME/src/my-project" \
+  --windows-python /mnt/c/Tools/quack-actual/.venv/Scripts/python.exe
+```
 
-Microphone audio and Whisper transcription remain local to the Windows machine. The voice wrapper sends **transcribed command text**, not raw microphone audio, to the selected coding CLI.
+No PulseAudio/WSLg microphone setup is required. Keep your actual Linux development
+project in the Linux filesystem. Configuration is loaded by the controller's OS and
+sent to the audio process: edit the Ubuntu config when running the Ubuntu controller.
+`install.sh --voice` is available for native Linux audio experimentation; it needs
+PortAudio and a working platform TTS driver, which are not installed by this script.
 
-Each agent CLI retains its own authentication, account, network behavior, configuration, permission rules, telemetry policy, and tool access.
+## Select and switch agents
 
-## Notes on output streaming
+```powershell
+.\launch.ps1 start --backend claude --project C:\src\my-project
+.\launch.ps1 start --backend codex --project C:\src\my-project
+.\launch.ps1 start --backend kiro --project C:\src\my-project
+```
 
-- **Kiro:** ACP message chunks stream directly.
-- **Claude Code:** token-level text deltas stream from `stream-json`.
-- **Codex:** `codex exec --json` emits structured JSONL events; agent messages are surfaced when its `agent_message` item completes.
+In the console, type `/backend copilot`, `/backend claude`, `/backend codex`, or
+`/backend kiro`. During a listening window, say “switch to Copilot” (or the other
+agent name). Idle sessions are retained when switching during the same application
+run. Sessions are not automatically restored after restarting Quack Actual.
 
-This project intentionally uses documented/programmatic CLI interfaces rather than scraping interactive terminal UIs.
+`--model` selects a model for the initially chosen backend; `--kiro-agent` selects a
+Kiro custom agent. Codex is read-only by default. Explicitly opt into workspace writes:
+
+```powershell
+.\launch.ps1 start --backend codex --project C:\src\my-project --codex-sandbox workspace-write
+```
+
+This program never adds full-access or skip-all-permissions flags. However, an
+agent can already have trusted tools or permissive settings configured by you.
+Review those settings before enabling always-listening operation.
+
+## Controls and permissions
+
+| Command | Action |
+|---|---|
+| `/backend NAME` | Switch backend, retaining its idle session |
+| `/new` | Reset the selected backend session |
+| `/listen`, `/sleep` | Arm one command or return to wake-phrase mode |
+| `/cancel` | Stop speech and request cancellation of the active turn |
+| `/mute`, `/unmute`, `/repeat` | Control spoken replies |
+| `/approve N`, `/deny` | Resolve a displayed ACP permission request; keyboard only |
+| `/status`, `/help`, `/quit` | Inspect state, get help, or exit |
+
+Spoken local controls include “cancel”, “go to sleep”, “mute”, “unmute”, and
+“repeat that”. While speaking or running an agent turn, prefix your command with
+“Quack Actual”, for example **“Quack Actual, cancel.”** Cancellation is best effort:
+it stops future work, but cannot undo tools that already ran or remote work they started.
+
+Copilot and Kiro use ACP and display actual permission options in the console.
+Claude and Codex use noninteractive JSONL modes: their existing permissions and
+sandbox rules apply, but this wrapper does not implement interactive approvals for
+those two adapters. Configure approved operations in the native CLI. Voice input
+never approves a pending tool action.
+
+## Configuration and audio behavior
+
+```powershell
+.\launch.ps1 config path
+.\launch.ps1 config init
+```
+
+Windows defaults to `%LOCALAPPDATA%\QuackActual\config.json`; Ubuntu defaults to
+`~/.config/quack-actual/config.json`. `--config PATH` selects another file. A complete
+example is in [config.example.json](config.example.json). Change `wake_phrase`,
+`microphone` (device index/name or null), `conversation_seconds`, or `rms_threshold`
+as needed. Restart the application after edits.
+
+The default wake mechanism transcribes local speech segments with `tiny.en` and
+checks an anchored phrase; commands use `small.en`. This is **not** a dedicated
+low-power wake-word model and may transcribe background conversation locally.
+Audio is not saved by this application. First model downloads use the model host's
+normal network/cache behavior. Agent CLIs may persist command transcripts themselves.
+
+A headset is recommended. There is no acoustic echo cancellation or speaker identity
+verification. Barge-in is detected after speech segmentation/transcription, not
+instantaneously. Wake phrases are convenience controls, not authentication. Code
+blocks and long URLs are filtered from TTS. Replies stream in the terminal; TTS
+starts after the agent completes its turn.
+
+## Optional startup at login
+
+This is opt-in and opens a visible console for permissions and diagnostics:
+
+```powershell
+.\scripts\autostart.ps1 -Backend copilot -Project C:\src\my-project
+# Or start the Ubuntu controller:
+.\scripts\autostart.ps1 -Mode wsl -Distro Ubuntu-24.04 -Backend kiro -Project '~/src/my-project'
+# Remove only Quack Actual's startup shortcut:
+.\scripts\autostart.ps1 -Remove
+```
+
+## Verify your installation
+
+Run `doctor`, then `devices`, then a text-only prompt. Test a wake phrase, a spoken
+reply, a follow-up, a cancellation, a denied tool request, and backend switching.
+Check `git diff` in the target project. Keep the terminal open and use Ctrl+C as an
+escape hatch. No live subscription calls or microphone recordings are made by CI.
+
+Developer tests and builds:
+
+```bash
+uv sync --python 3.12
+uv run python -m unittest discover -s tests -v
+uv run python -m compileall -q src tests
+uv build
+uv run python scripts/build_release.py
+```
+
+See [architecture](docs/ARCHITECTURE.md), [backend references](docs/BACKENDS.md),
+[security notes](SECURITY.md), and [release notes](RELEASE.md).

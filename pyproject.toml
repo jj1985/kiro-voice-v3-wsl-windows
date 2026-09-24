@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=75,<82"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quack-actual"
+version = "0.5.0"
+description = "One voice. Every agent. A local voice console for coding harnesses."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+[project.optional-dependencies]
+voice = [
+    "faster-whisper>=1.1,<2",
+    "numpy>=1.26,<3",
+    "sounddevice>=0.5,<0.6",
+    "pyttsx3>=2.98,<3",
+]
+
+[project.scripts]
+quack-actual = "quack_actual.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv]
+required-version = ">=0.10.0"

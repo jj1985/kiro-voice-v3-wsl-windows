@@ -1,0 +1,21 @@
+{
+  "backend": "copilot",
+  "wake_phrase": "quack actual",
+  "conversation_seconds": 30.0,
+  "arm_seconds": 10.0,
+  "wake_model": "tiny.en",
+  "command_model": "small.en",
+  "device": "cpu",
+  "compute_type": "int8",
+  "microphone": null,
+  "rms_threshold": 0.012,
+  "silence_seconds": 0.85,
+  "max_utterance_seconds": 30.0,
+  "barge_in": true,
+  "tts": true,
+  "tts_rate": 190,
+  "tts_max_chars": 2500,
+  "activation_sound": true,
+  "windows_python": "",
+  "commands": {}
+}

@@ -1,0 +1,116 @@
+name: Verify and release
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quack-actual-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.10.0'
+          enable-cache: false
+      - run: uv lock --python 3.12
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dependency-lock
+          path: uv.lock
+          retention-days: 7
+  test:
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: dependency-lock
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.10.0'
+          enable-cache: false
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2
+      - run: uv sync --locked --extra voice --python 3.12
+      - run: uv run --locked --extra voice python -m compileall -q src tests scripts
+      - run: uv run --locked --extra voice python -m unittest discover -s tests -v
+      - run: uv run --locked --extra voice python -c "import sounddevice, faster_whisper, pyttsx3; print('Audio dependency imports passed')"
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Filter *.ps1 | Where-Object { $_.FullName -notmatch '[\\/]\.venv[\\/]' } | ForEach-Object {
+            $Tokens = $null; $Errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$Tokens, [ref]$Errors)
+            if ($Errors.Count -gt 0) { throw ($Errors | Out-String) }
+          }
+          .\install.ps1 -TextOnly -NoBootstrap
+          if ($LASTEXITCODE -ne 0) { throw 'Installer smoke test failed' }
+          .\launch.ps1 --version
+          if ($LASTEXITCODE -ne 0) { throw 'Launcher smoke test failed' }
+      - if: runner.os == 'Linux'
+        run: |
+          bash -n install.sh launch.sh
+          bash install.sh --no-bootstrap
+          bash launch.sh --version
+  publish:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dependency-lock
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.10.0'
+          enable-cache: false
+      - name: Build distributions and setup bundle
+        run: |
+          uv build --python 3.12
+          uv run --locked python scripts/build_release.py
+          uv run --locked python scripts/verify_release.py dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quack-actual-release
+          path: dist/*
+          retention-days: 30
+      - name: Publish versioned preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version=$(uv run --locked python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; it will not be overwritten."
+            exit 0
+          fi
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA" || { echo 'main changed; rerun from its latest commit'; exit 1; }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add uv.lock
+          if ! git diff --cached --quiet; then
+            git commit -m 'Lock Quack Actual release dependencies [skip ci]'
+            git push origin HEAD:main
+          fi
+          gh release create "$tag" dist/* --target "$(git rev-parse HEAD)" \
+            --title "Quack Actual $version - Radio Check" --notes-file RELEASE.md --prerelease

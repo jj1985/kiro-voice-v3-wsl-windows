@@ -1,5 +1,12 @@
 .venv/
+.venv-wsl/
 __pycache__/
-*.pyc
-windows/config.json
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+config.json
+.env
+.env.*
 *.log
