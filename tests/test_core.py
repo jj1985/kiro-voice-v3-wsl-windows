@@ -71,7 +71,7 @@ class CoreTests(unittest.TestCase):
             (root / 'node.exe').write_text('')
             with patch('quack_actual.process.shutil.which', return_value=str(shim)):
                 argv = resolve_command('copilot')
-            self.assertEqual(argv, [str(root / 'node.exe'), str(package / 'index.js')])
+            self.assertEqual(argv, [str(root / 'node.exe'), str((package / 'index.js').resolve())])
 
     def test_unknown_shim_rejected(self):
         with patch('quack_actual.process.shutil.which', return_value='/missing/copilot.cmd'):

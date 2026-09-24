@@ -2,6 +2,10 @@
 import json
 import sys
 
+# Match the UTF-8 wire format of real agent CLIs on Windows as well as Linux.
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
+
 
 def send(value):
     print(json.dumps(value), flush=True)
