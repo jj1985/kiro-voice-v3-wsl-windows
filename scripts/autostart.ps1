@@ -2,12 +2,13 @@
 param(
     [ValidateSet('native','wsl')][string]$Mode = 'native',
     [ValidateSet('copilot','claude','codex','kiro')][string]$Backend = 'copilot',
-    [string]$Project = $HOME,
+    [string]$Project = '',
     [string]$Distro = 'Ubuntu-24.04',
     [switch]$Remove
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
+if (-not $Project) { $Project = if ($Mode -eq 'wsl') { '~' } else { $HOME } }
 $ShortcutPath = Join-Path ([Environment]::GetFolderPath('Startup')) 'Quack Actual.lnk'
 if ($Remove) {
     if (Test-Path $ShortcutPath) { Remove-Item -LiteralPath $ShortcutPath }

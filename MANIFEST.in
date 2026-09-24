@@ -1,3 +1,4 @@
+include RELEASE-FILES.txt
 include README.md RELEASE.md SECURITY.md pyproject.toml uv.lock config.example.json
 include install.ps1 install.sh launch.ps1 launch.sh .python-version .gitattributes .gitignore
 recursive-include docs *.md

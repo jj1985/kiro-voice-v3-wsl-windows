@@ -26,7 +26,9 @@ the selected coding agent under that provider's policies and your configuration.
 ## Native Windows: setup and first run
 
 Download the setup ZIP from this repository's **Releases**, extract it to a permanent
-folder such as `C:\Tools\quack-actual`, and open PowerShell there. Do not install
+folder such as `C:\Tools\quack-actual`, and open 64-bit PowerShell there.
+For Copilot on Windows, install PowerShell 7 (`pwsh`) first; its vendor requires
+PowerShell 6 or later. Windows PowerShell 5.1 alone does not meet that prerequisite. Do not install
 inside the ZIP viewer or move the folder after creating its virtual environment.
 
 ```powershell
@@ -220,3 +222,9 @@ uv run python scripts/build_release.py
 
 See [architecture](docs/ARCHITECTURE.md), [backend references](docs/BACKENDS.md),
 [security notes](SECURITY.md), and [release notes](RELEASE.md).
+
+## Distribution review
+
+See [distribution and portability](docs/DISTRIBUTION.md) for release validation,
+private-data checks, environment recreation, and the outstanding license decision.
+Distribute setup archives, not your installed virtual environment or user settings.
