@@ -33,12 +33,16 @@ BACKENDS = ("copilot", "claude", "codex", "kiro")
 
 def default_path() -> Path:
     if os.name == "nt":
-        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "QuackActual/config.json"
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "quack-actual/config.json"
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local") / "QuackActual/config.json"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "quack-actual/config.json"
+
+
+def resolve_path(path: str | Path | None = None) -> Path:
+    return Path(path or os.environ.get("QUACK_ACTUAL_CONFIG") or default_path()).expanduser()
 
 
 def load(path: str | Path | None = None) -> dict:
-    file = Path(path or os.environ.get("QUACK_ACTUAL_CONFIG") or default_path()).expanduser()
+    file = resolve_path(path)
     result = copy.deepcopy(DEFAULTS)
     if file.exists():
         values = json.loads(file.read_text(encoding="utf-8-sig"))
@@ -69,8 +73,11 @@ def validate(cfg: dict) -> None:
     for key in ("tts_rate", "tts_max_chars"):
         if not isinstance(cfg[key], int) or isinstance(cfg[key], bool) or cfg[key] <= 0:
             raise ValueError(f"{key} must be a positive integer")
-    if cfg["microphone"] is not None and not isinstance(cfg["microphone"], (int, str)):
+    if isinstance(cfg["microphone"], bool) or (cfg["microphone"] is not None and not isinstance(cfg["microphone"], (int, str))):
         raise ValueError("microphone must be null, an index, or a device-name substring")
+    for key in ("wake_model", "command_model", "device", "compute_type", "windows_python"):
+        if not isinstance(cfg[key], str) or "\x00" in cfg[key] or (key != "windows_python" and not cfg[key].strip()):
+            raise ValueError(f"{key} must be a valid string")
     if not isinstance(cfg["commands"], dict):
         raise ValueError("commands must be a mapping of backend names to argument lists")
     for name, command in cfg["commands"].items():
@@ -81,7 +88,7 @@ def validate(cfg: dict) -> None:
 
 
 def init(path: str | Path | None = None) -> Path:
-    file = Path(path or os.environ.get("QUACK_ACTUAL_CONFIG") or default_path()).expanduser()
+    file = resolve_path(path)
     file.parent.mkdir(parents=True, exist_ok=True)
     if not file.exists():
         with file.open("x", encoding="utf-8") as out:

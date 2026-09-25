@@ -18,6 +18,7 @@ from .process import resolve_command
 
 
 def doctor(cfg, backend=None, text_only=False):
+    backend = backend or cfg["backend"]
     print(f"Quack Actual {__version__}\nPlatform: {platform.system()} {platform.release()} ({platform.machine()})")
     print(f"Python: {sys.version.split()[0]}\nInterpreter: {sys.executable}")
     venv = sys.prefix != sys.base_prefix
@@ -80,7 +81,7 @@ def main(argv=None):
     args = parser().parse_args(argv)
     try:
         if args.command == "config":
-            print(config.init(args.config_path) if args.action == "init" else args.config_path or config.default_path())
+            print(config.init(args.config_path) if args.action == "init" else config.resolve_path(args.config_path))
             return 0
         cfg = config.load(args.config_path)
         if args.command == "doctor":

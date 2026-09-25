@@ -18,7 +18,11 @@ def audio_command(windows_python=None):
     if is_wsl():
         candidate = windows_python or os.environ.get("QUACK_ACTUAL_WINDOWS_PYTHON")
         if not candidate:
-            candidate = Path(__file__).resolve().parents[2] / ".venv/Scripts/python.exe"
+            # Installed wheels have no adjacent source checkout. The Linux venv
+            # and Windows venv are siblings created by the provided installers.
+            root = Path(sys.prefix).parent if Path(sys.prefix).name == ".venv-wsl" else Path(__file__).resolve().parents[2]
+            candidate = root / ".venv/Scripts/python.exe"
+        candidate = Path(candidate).expanduser()
         if not Path(candidate).is_file():
             raise RuntimeError("WSL needs the Windows audio environment. Run install.ps1 in the same shared checkout or pass --windows-python /mnt/c/.../.venv/Scripts/python.exe.")
         return [str(candidate), "-X", "utf8", "-u", "-m", "quack_actual.audio"]
